@@ -13,6 +13,7 @@ var factory = function(Web3) {
     // We can't support *all* synchronous methods because we have to call out to
     // a transaction signer. So removing the ability to serve any.
     send(payload, callback) {
+      
       var requests = payload;
       if (!(requests instanceof Array)) {
         requests = [requests];
@@ -21,6 +22,9 @@ var factory = function(Web3) {
       for (var request of requests) {
         if (request.method == "aoa_sendTransaction") {
           throw new Error("HookedWeb3Provider does not support synchronous transactions. Please provide a callback.")
+        }
+        if (request.method == 'aoa_accounts') {
+          return {"jsonrpc":"2.0","id":0,"result":this.transaction_signer.getAddresses()}
         }
       }
 
@@ -35,17 +39,29 @@ var factory = function(Web3) {
     // methods to sendRawTransaction, calling out to the transaction_signer to
     // get the data for sendRawTransaction.
     sendAsync(payload, callback) {
+      
       var finishedWithRewrite = () => {
         super.sendAsync(payload, callback);
       };
 
-      var requests = payload;
+      var preRequests = payload;
 
       if (!(payload instanceof Array)) {
-        requests = [payload];
+        preRequests = [payload];
       }
 
-      this.rewritePayloads(0, requests, {}, finishedWithRewrite);
+      var requests = []
+      for (var request of preRequests) {
+        if (request.method == 'aoa_accounts') {
+          callback(null, {"jsonrpc":"2.0","id":0,"result":this.transaction_signer.getAddresses()})
+        }else{
+          requests.push(request)
+        }
+      }
+
+      if (requests.length>0){
+        this.rewritePayloads(0, requests, {}, finishedWithRewrite);
+      }
     }
 
     // Rewrite all aoa_sendTransaction payloads in the requests array.
